@@ -101,11 +101,14 @@ class ArxivScannerClient:
         )
 
         searchResults = self.client.results(search)
+        res_counter = 0
 
         for r in self.client.results(search):
+            res_counter += 1
             print(r.title)
 
-        self.send_email(searchResults)
+        if res_counter > 0:
+            self.send_email(searchResults)
         self.config["lastUpdate"] = datetime.today().strftime("%Y%m%d%H%M")
         self.save_config = True
 
