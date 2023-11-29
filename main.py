@@ -26,6 +26,7 @@ class QueryCategory(str, enum.Enum):
 class ArxivScannerClient:
 
     def __init__(self, config_file):
+        self.config_file = config_file
         self.save_config = False
         self.client = arxiv.Client()
 
@@ -39,7 +40,7 @@ class ArxivScannerClient:
 
     def close(self):
         if self.save_config:
-            with open("config.json", "w") as f:
+            with open(self.config_file, "w") as f:
                 json.dump(self.config, f)
 
     def register_personal_details(self, name, email, notification_schedule, email_title=None):
@@ -143,7 +144,7 @@ def papers_to_html(name, paper_list):
         <html lang="en">
             <body>
                 <div style="background-color:#eee;padding:10px 20px;">
-                    <h2 style="font-family:Georgia, 'Times New Roman', Times, serif;color:#454349;">Hi {name}, here is your arXiv update!</h2>
+                    <h1 style="color:#454349;">Hi {name}, here is your arXiv update!</h1>
                 </div>'''
     for paper in paper_list:
         html += paper_template.format(paper.title, ", ".join([a.name for a in paper.authors]), paper.summary,
