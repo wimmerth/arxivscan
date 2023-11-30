@@ -48,7 +48,8 @@ class ArxivScannerClient:
             email_title = "New Papers in Your Interest Area"
         self.config["name"] = name
         self.config["email"] = email
-        self.config["notification_schedule"] = notification_schedule
+        if notification_schedule > 0:
+            self.config["notification_schedule"] = notification_schedule
         self.config["email_title"] = email_title
         self.config["max_results"] = 20
         self.save_config = True
@@ -72,22 +73,24 @@ class ArxivScannerClient:
         self.save_config = True
 
     def set_update_frequency(self, frequency):
-        self.config["notification_schedule"] = frequency
-        self.save_config = True
+        if frequency > 0:
+            self.config["notification_schedule"] = frequency
+            self.save_config = True
 
     def sendQuery(self):
-        if "lastUpdate" in self.config:
-            lastUpdate = datetime.strptime(self.config["lastUpdate"], "%Y%m%d%H%M")
-            if datetime.today() - lastUpdate < timedelta(days=self.config["notification_schedule"]):
-                print("Not time to update yet!")
-                return
         if "notification_schedule" in self.config:
-            date_start, date_end = convert_date(self.config["notification_schedule"])
             if "lastUpdate" in self.config:
-                date_start = self.config["lastUpdate"]
-            query = f'submittedDate:[{date_start} TO {date_end}] AND ('
+                lastUpdate = datetime.strptime(self.config["lastUpdate"], "%Y%m%d%H%M")
+                if datetime.today() - lastUpdate < timedelta(days=self.config["notification_schedule"]):
+                    print("Not time to update yet!")
+                    return
+            date_start, date_end = convert_date(self.config["notification_schedule"])
         else:
-            query = '('
+            date_start, date_end = convert_date(7)
+        if "lastUpdate" in self.config:
+            date_start = self.config["lastUpdate"]
+        query = f'submittedDate:[{date_start} TO {date_end}] AND ('
+
         for interest in self.config["interests"]:
             query += interest["category"] + ':' + f'"{interest["query"]}"' + " OR "
         query = query[:-4]
@@ -187,28 +190,41 @@ if __name__ == "__main__":
     args = parser.parse_args()
     arxivClient = ArxivScannerClient(args.config or "config.json")
     if arxivClient.config == {}:
+
         name = input("Enter your name: ")
         while name == "":
             name = input("Enter your name: ")
-        email = input("Enter your email address: ")
+
+        email = input("Enter your email address (optional, default: ARXIVSCAN_EMAIL): ")
         # check for valid email address
-        while re.match(r"[^@]+@[^@]+\.[^@]+", email) is None:
+        while email != "" and re.match(r"[^@]+@[^@]+\.[^@]+", email) is None:
             email = input("Enter a VALID email address: ")
-        notification_schedule = input("How often would you like to be notified? (frequency in days): ")
-        while notification_schedule == "" or not notification_schedule.replace(".", "").isnumeric():
-            notification_schedule = input("How often would you like to be notified? (frequency in days): ")
-        notification_schedule = float(notification_schedule)
-        email_title = input("Enter a title for the notification email (optional): ")
+        if email == "":
+            email = client_email
+
+        # notification_schedule = input("How often would you like to be notified? (frequency in days, optional): ")
+        # while notification_schedule != "" and not notification_schedule.replace(".", "").isnumeric():
+        #     notification_schedule = input("How often would you like to be notified? (frequency in days, optional): ")
+        # if notification_schedule == "":
+        #     notification_schedule = -1
+        # else:
+        #     notification_schedule = float(notification_schedule)
+        notification_schedule = -1
+
+        email_title = input("Enter a title for the notification email (optional, default: New Papers in Your Interest Area): ")
         arxivClient.register_personal_details(name, email, notification_schedule,
                                               email_title if email_title != "" else None)
+
         interest = input("Enter an interest in the form 'category:query': ")
         while interest != "":
             arxivClient.register_new_interest(interest)
             interest = input("Enter an interest in the form 'category:query': ")
+
     elif args.interests:
         interest = input("Enter an interest in the form 'category:query': ")
         while interest != "":
             arxivClient.register_new_interest(interest)
             interest = input("Enter an interest in the form 'category:query': ")
+
     arxivClient.sendQuery()
     arxivClient.close()
