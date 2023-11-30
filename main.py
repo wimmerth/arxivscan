@@ -7,6 +7,7 @@ import enum
 from datetime import datetime, timedelta
 import argparse
 import re
+from urllib import request
 
 client_email = os.environ.get("ARXIVSCAN_EMAIL")
 client_password = os.environ.get("ARXIVSCAN_PASSWORD")
@@ -178,6 +179,15 @@ def convert_date(lookback_days):
     return data_start.strftime("%Y%m%d%H%M"), date_end.strftime("%Y%m%d%H%M")
 
 
+def internet_on():
+    try:
+        request.urlopen('https://8.8.8.8', timeout=1)
+        return True
+    except Exception as err:
+        print(err)
+        return False
+
+
 if __name__ == "__main__":
     if not client_email or not client_password:
         print("Please set the environment variables ARXIVSCAN_EMAIL and ARXIVSCAN_PASSWORD")
@@ -186,11 +196,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Arxiv Scanner")
     parser.add_argument("--config", help="Path to config file")
     parser.add_argument("--interests", help="Add new interests", action=argparse.BooleanOptionalAction)
+    parser.add_argument("--on_startup", help="Run script on machine startup", action=argparse.BooleanOptionalAction)
 
     args = parser.parse_args()
     arxivClient = ArxivScannerClient(args.config or "config.json")
     if arxivClient.config == {}:
-
+        assert not args.on_startup, "Cannot run on startup without a config file!"
         name = input("Enter your name: ")
         while name == "":
             name = input("Enter your name: ")
@@ -202,16 +213,16 @@ if __name__ == "__main__":
         if email == "":
             email = client_email
 
-        # notification_schedule = input("How often would you like to be notified? (frequency in days, optional): ")
-        # while notification_schedule != "" and not notification_schedule.replace(".", "").isnumeric():
-        #     notification_schedule = input("How often would you like to be notified? (frequency in days, optional): ")
-        # if notification_schedule == "":
-        #     notification_schedule = -1
-        # else:
-        #     notification_schedule = float(notification_schedule)
-        notification_schedule = -1
+        notification_schedule = input("How often would you like to be notified? (frequency in days, optional): ")
+        while notification_schedule != "" and not notification_schedule.replace(".", "").isnumeric():
+            notification_schedule = input("How often would you like to be notified? (frequency in days, optional): ")
+        if notification_schedule == "":
+            notification_schedule = -1
+        else:
+            notification_schedule = float(notification_schedule)
 
-        email_title = input("Enter a title for the notification email (optional, default: New Papers in Your Interest Area): ")
+        email_title = input(
+            "Enter a title for the notification email (optional, default: New Papers in Your Interest Area): ")
         arxivClient.register_personal_details(name, email, notification_schedule,
                                               email_title if email_title != "" else None)
 
@@ -221,10 +232,22 @@ if __name__ == "__main__":
             interest = input("Enter an interest in the form 'category:query': ")
 
     elif args.interests:
+        assert not args.on_startup, "Cannot interactively add interests on startup!"
         interest = input("Enter an interest in the form 'category:query': ")
         while interest != "":
             arxivClient.register_new_interest(interest)
             interest = input("Enter an interest in the form 'category:query': ")
+
+    if args.on_startup:
+        import time
+        time.sleep(20)
+        retry_counter = 0
+        while not internet_on():
+            time.sleep(10)
+            retry_counter += 1
+            if retry_counter > 20:
+                print("No internet connection found!")
+                exit(1)
 
     arxivClient.sendQuery()
     arxivClient.close()
