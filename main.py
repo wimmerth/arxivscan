@@ -182,8 +182,8 @@ def convert_date(lookback_days):
     start_date_est = start_date - timedelta(hours=-5)
     end_date_est = end_date - timedelta(hours=-5)
 
-    submission_start_date_est = find_next_update_and_submission_slot(start_date_est)
-    submission_end_date_est = find_next_update_and_submission_slot(end_date_est)
+    submission_start_date_est = find_last_update_and_submission_slot(start_date_est, start=True)
+    submission_end_date_est = find_last_update_and_submission_slot(end_date_est, start=False)
 
     submission_start_date = submission_start_date_est + timedelta(hours=5)
     submission_end_date = submission_end_date_est + timedelta(hours=5)
@@ -191,38 +191,38 @@ def convert_date(lookback_days):
     return submission_start_date, submission_end_date
 
 
-def find_next_update_and_submission_slot(current_date):
+def find_last_update_and_submission_slot(current_date, start=True):
     # Define the days when updates are posted
     update_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Sunday"]
 
     # Define the time when updates are posted
     update_time = datetime.strptime("20:00", "%H:%M").time()
 
-    # Check if today is an update day and the current time is before the update time
-    if current_date.strftime("%A") in update_days and current_date.time() < update_time:
+    # Check if today is an update day and the current time is after the update time
+    if current_date.strftime("%A") in update_days and current_date.time() > update_time:
         # The next update is today at 20:00
-        next_update = datetime.combine(current_date.date(), update_time)
+        last_update = datetime.combine(current_date.date(), update_time)
     else:
-        # Find the next update day
-        days_ahead = 1
+        # Find the most recent update day
+        days_back = 1
         while True:
-            next_day = current_date + timedelta(days=days_ahead)
+            next_day = current_date - timedelta(days=days_back)
             if next_day.strftime("%A") in update_days:
                 break
-            days_ahead += 1
+            days_back += 1
 
-        next_update = datetime.combine(next_day.date(), update_time)
+        last_update = datetime.combine(next_day.date(), update_time)
 
     # Calculate the start of the corresponding submission timeslot
-    if next_update.strftime("%A") == "Sunday":
+    if last_update.strftime("%A") == "Sunday":
         # thursday at 14:00
-        submission_start = next_update - timedelta(days=3, hours=6)
-    elif next_update.strftime("%A") == "Monday":
+        submission_start = last_update - timedelta(days=3 if start else 2, hours=6)
+    elif last_update.strftime("%A") == "Monday":
         # friday at 14:00
-        submission_start = next_update - timedelta(days=3, hours=6)
+        submission_start = last_update - timedelta(days=3 if start else 0, hours=6)
     else:
         # the day before at 14:00
-        submission_start = next_update - timedelta(days=1, hours=6)
+        submission_start = last_update - timedelta(days=1 if start else 0, hours=6)
 
     return submission_start
 
