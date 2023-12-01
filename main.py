@@ -142,7 +142,7 @@ def papers_to_html(name, paper_list):
                 <h3>{}</h3>
                 <p>{}</p>
                 <p>{}</p>
-                <a href="{}">Go to paper page</a>
+                <p><a href="{}">Go to paper page</a> - Submitted on {}</p>
             </div>
         </div>
     </div>
@@ -157,7 +157,7 @@ def papers_to_html(name, paper_list):
                 </div>'''
     for paper in paper_list:
         html += paper_template.format(paper.title, ", ".join([a.name for a in paper.authors]), paper.summary,
-                                      paper.entry_id)
+                                      paper.entry_id, paper.published.strftime("%d %B %Y"))
     html += "</body></html>"
     return html
 
