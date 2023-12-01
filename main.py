@@ -4,7 +4,7 @@ import smtplib
 import json
 import os
 import enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import argparse
 import re
 from urllib import request
@@ -80,14 +80,16 @@ class ArxivScannerClient:
 
     def sendQuery(self):
         if "notification_schedule" in self.config:
-            if "lastUpdate" in self.config:
-                lastUpdate = datetime.strptime(self.config["lastUpdate"], "%Y%m%d%H%M")
-                if datetime.today() - lastUpdate < timedelta(days=self.config["notification_schedule"]):
-                    print("Not time to update yet!")
-                    return
             date_start, date_end = convert_date(self.config["notification_schedule"])
+            if ("lastUpdate" in self.config and datetime.strptime(self.config["lastUpdate"],
+                                                                  "%Y%m%d%H%M") > date_end - timedelta(
+                days=self.config["notification_schedule"])):
+                print("Not time to update yet!")
+                return
         else:
             date_start, date_end = convert_date(7)
+        date_start = date_start.strftime("%Y%m%d%H%M")
+        date_end = date_end.strftime("%Y%m%d%H%M")
         if "lastUpdate" in self.config:
             date_start = self.config["lastUpdate"]
         query = f'submittedDate:[{date_start} TO {date_end}] AND ('
@@ -113,7 +115,7 @@ class ArxivScannerClient:
 
         if res_counter > 0:
             self.send_email(searchResults)
-        self.config["lastUpdate"] = datetime.today().strftime("%Y%m%d%H%M")
+        self.config["lastUpdate"] = date_end
         self.save_config = True
 
     def send_email(self, paper_list):
@@ -174,9 +176,55 @@ def parse_interest(interest):
 
 
 def convert_date(lookback_days):
-    data_start = datetime.today() - timedelta(days=lookback_days)
-    date_end = datetime.today()
-    return data_start.strftime("%Y%m%d%H%M"), date_end.strftime("%Y%m%d%H%M")
+    start_date = datetime.utcnow() - timedelta(days=lookback_days)
+    end_date = datetime.utcnow()
+
+    start_date_est = start_date - timedelta(hours=-5)
+    end_date_est = end_date - timedelta(hours=-5)
+
+    submission_start_date_est = find_next_update_and_submission_slot(start_date_est)
+    submission_end_date_est = find_next_update_and_submission_slot(end_date_est)
+
+    submission_start_date = submission_start_date_est + timedelta(hours=5)
+    submission_end_date = submission_end_date_est + timedelta(hours=5)
+
+    return submission_start_date, submission_end_date
+
+
+def find_next_update_and_submission_slot(current_date):
+    # Define the days when updates are posted
+    update_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Sunday"]
+
+    # Define the time when updates are posted
+    update_time = datetime.strptime("20:00", "%H:%M").time()
+
+    # Check if today is an update day and the current time is before the update time
+    if current_date.strftime("%A") in update_days and current_date.time() < update_time:
+        # The next update is today at 20:00
+        next_update = datetime.combine(current_date.date(), update_time)
+    else:
+        # Find the next update day
+        days_ahead = 1
+        while True:
+            next_day = current_date + timedelta(days=days_ahead)
+            if next_day.strftime("%A") in update_days:
+                break
+            days_ahead += 1
+
+        next_update = datetime.combine(next_day.date(), update_time)
+
+    # Calculate the start of the corresponding submission timeslot
+    if next_update.strftime("%A") == "Sunday":
+        # thursday at 14:00
+        submission_start = next_update - timedelta(days=3, hours=6)
+    elif next_update.strftime("%A") == "Monday":
+        # friday at 14:00
+        submission_start = next_update - timedelta(days=3, hours=6)
+    else:
+        # the day before at 14:00
+        submission_start = next_update - timedelta(days=1, hours=6)
+
+    return submission_start
 
 
 def internet_on():
@@ -240,6 +288,7 @@ if __name__ == "__main__":
 
     if args.on_startup:
         import time
+
         time.sleep(20)
         retry_counter = 0
         while not internet_on():
