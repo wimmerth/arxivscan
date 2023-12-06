@@ -92,6 +92,9 @@ class ArxivScannerClient:
         date_end = date_end.strftime("%Y%m%d%H%M")
         if "lastUpdate" in self.config:
             date_start = self.config["lastUpdate"]
+        if date_start == date_end:
+            print("No new updates!")
+            return
         query = f'submittedDate:[{date_start} TO {date_end}] AND ('
 
         for interest in self.config["interests"]:
@@ -106,15 +109,20 @@ class ArxivScannerClient:
             sort_order=arxiv.SortOrder.Descending
         )
 
-        searchResults = self.client.results(search)
-        res_counter = 0
+        try:
+            searchResults = self.client.results(search)
+        except Exception as e:
+            print(e)
+            return
 
-        for r in self.client.results(search):
-            res_counter += 1
+        results = []
+
+        for r in searchResults:
             print(r.title)
+            results.append(r)
 
-        if res_counter > 0:
-            self.send_email(searchResults)
+        if len(results) > 0:
+            self.send_email(results)
         self.config["lastUpdate"] = date_end
         self.save_config = True
 
